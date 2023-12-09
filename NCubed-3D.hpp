@@ -1,5 +1,5 @@
-#ifndef NCUBEDTREE_HPP_3D_
-#define NCUBEDTREE_HPP_3D_
+#ifndef NCUBEDTREE_HPP_
+#define NCUBEDTREE_HPP_
 /*
 
 */
