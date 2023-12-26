@@ -5,86 +5,117 @@
 #include <mutex>
 #include <sstream>
 #include <iostream>
+#include <memory>
 
-template<std::uint8_t N, std::uint16_t MAXT, typename T>
+template<std::uint8_t N, std::uint16_t MAXT, typename T, typename FType = double>
 class CubeTree {
     public:
     typedef struct {
-        glm::vec3 center;
-        glm::vec3 length;
+        glm::vec<3, FType, glm::defaultp> center;
+        FType length;
         operator std::string() {
             std::stringstream ss;
-            ss << "Center: " << center.x << " -- " << center.y << " -- " << center.z << std::endl;
-            ss << "Length: " << length.x << " -- " << length.y << " -- " << length.z << std::endl;
+            ss << "Center: " << center.x << " " << center.y << " " << center.z << " " << "Length: " << length << std::endl;
             return ss.str();
         }
     } BBox;
     CubeTree* parent;
-    CubeTree* children[N * N * N];
+    CubeTree* children[N][N][N];
     constexpr static std::uint16_t MaxT{MAXT};
     std::mutex mtx;
-    std::vector<T> data;
+    std::vector<std::shared_ptr<T>> data;
     BBox box;
-
-    CubeTree(const BBox& box) :
+    
+    void PrintTree() {
+        std::cout << "This: " << this << std::endl;
+        std::cout << "Box: " << std::string(box) << std::endl;
+        std::cout << "Parent: " << parent << std::endl;
+        for(std::uint8_t i{0}; i < N; i++) {
+            for(std::uint8_t j{0}; j < N; j++) {
+                for(std::uint8_t k{0}; k < N; k++) {
+                    CubeTree* child{children[i][j][k]};
+                    std::cout << "Child Idx: " << "[" << i << "][" << j << "][" << k << "]" << std::endl;
+                    if(child != nullptr)
+                        child->PrintTree();
+                    else
+                        std::cout << nullptr << std::endl;
+                }
+            }
+        }
+    }
+    
+    CubeTree(const BBox& box, std::shared_ptr<T> data) :
         parent(nullptr),
-        children(nullptr),
-        box(box) {}
+        children({nullptr}, {nullptr}, {nullptr}),
+        box(box) {
+        insert(data);
+    }
     
     CubeTree(CubeTree* child) :
         parent(nullptr),
-        children(nullptr),
-        box({child->box.center.x - ((box.length.x * (N - 1))),
-            child->box.center.y - ((box.length.y * (N - 1))),
-            child->box.center.z - ((box.length.z * (N - 1))),
-        }, (box.length * N)) {
-            children[(N * N * N) - 1] = child;
-        }
+        children({nullptr}, {nullptr}, {nullptr}),
+        box({child->box.center.x - ((child->box.length * (N - 1))),
+            child->box.center.y - ((child->box.length * (N - 1))),
+            child->box.center.z - ((child->box.length * (N - 1))),
+        }, (child->box.length * N)) {
+            for(std::uint8_t i{0}; i < N; i++)
+                for(std::uint8_t j{0}; j < N; j++)
+                    for(std::uint8_t k{0}; k < N; k++)
+                        children[i][j][k] = nullptr;
+            children[N - 1][N - 1][N - 1] = child;
+    }
     
     ~CubeTree() {
-        for(CubeTree child : children) {
-            if(child != nullptr) {
-                delete child;
-                child = nullptr;
+        for(std::uint8_t i{0}; i < N; i++) {
+            for(std::uint8_t j{0}; j < N; j++) {
+                for(std::uint8_t k{0}; k < N; k++) {
+                    CubeTree* child{children[i][j][k]};
+                    if(child != nullptr) {
+                        delete child;
+                        child = nullptr;
+                    }
+                }
             }
         }
     }
     
     const bool inside(const glm::vec3& pos) const {
         return
-        pos.x >= (box.center.x - box.lengths.x) &&
-        pos.x <= (box.center.x + box.lengths.x) &&
-        pos.y >= (box.center.y - box.lengths.y) &&
-        pos.y <= (box.center.y + box.lengths.y) &&
-        pos.z >= (box.center.z - box.lengths.z) &&
-        pos.z <= (box.center.z + box.lengths.z);
+        pos.x >= (box.center.x - box.length) &&
+        pos.x <= (box.center.x + box.length) &&
+        pos.y >= (box.center.y - box.length) &&
+        pos.y <= (box.center.y + box.length) &&
+        pos.z >= (box.center.z - box.length) &&
+        pos.z <= (box.center.z + box.length);
     }
     
     const bool isParent() const {
-        for(CubeTree* child : children)
-            if(child != nullptr) return true;
+        for(std::uint8_t i{0}; i < N; i++)
+            for(std::uint8_t j{0}; j < N; j++)
+                for(std::uint8_t k{0}; k < N; k++)
+                    if(children[i][j][k] != nullptr) return true;
         return false;
     }
     
     private:
-    CubeTree* insertToChild(T* data) {
-        for(std::uint16_t i{0}; i < N; i++) {
-            for(std::uint16_t j{0}; j < N; j++) {
-                for(std::uint16_t k{0}; k < N; k++) {
-                    const std::uint16_t childIdx{(i * N * N) + (j * N) +  k};
-                    CubeTree* child{children[childIdx]};
+    void insertToChild(std::shared_ptr<T> data) {
+        for(std::uint8_t i{0}; i < N; i++) {
+            for(std::uint8_t j{0}; j < N; j++) {
+                for(std::uint8_t k{0}; k < N; k++) {
+                    CubeTree* child{children[i][j][k]};
+                    const auto childLength{box.length / N};
                     const BBox childBBox{
                         {
-                            (box.center.x - ((box.length.x / N) * (N - i - 1))),
-                            (box.center.y - ((box.length.y / N) * (N - j - 1))),
-                            (box.center.z - ((box.length.z / N) * (N - k - 1)))
-                        },
-                        (box.length / N)
+                            box.center.x - (childLength * (N - i - 1)),
+                            box.center.y - (childLength * (N - j - 1)),
+                            box.center.z - (childLength * (N - k - 1))
+                        }, childLength
                     };
                     if(inside(childBBox.center)) {
                         if(child == nullptr)
-                            child = new CubeTree(childBBox);
-                        return child->insert(data);
+                            child = new CubeTree(childBBox, data);
+                        child->insert(data);
+                        return;
                     }
                 }
             }
@@ -92,7 +123,7 @@ class CubeTree {
     }
     
     public:
-    CubeTree* insert(T* data) {
+    CubeTree* insert(std::shared_ptr<T> data) {
         std::lock_guard<std::mutex> lock(mtx);
         if(inside(data->m_position)) {
             if(!isParent()) {
@@ -100,7 +131,7 @@ class CubeTree {
                     this->data.emplace_back(data);
                     return this;
                 } else if(this->data.size() >= MaxT) {
-                    for(CubeTree* d : this->data)
+                    for(auto& d : this->data)
                         insertToChild(d);
                     this->data.clear();
                 }
@@ -112,23 +143,6 @@ class CubeTree {
                 parent = new CubeTree(this);
             return parent->insert(data);
         }
-    }
-
-    operator std::string() {
-        std::stringstream ss;
-        ss << "Children: " << std::endl;
-        for(CubeTree* child : children)
-            if(child != nullptr)
-                ss << child->box;
-        return ss.str();
-    }
-    
-    void PrintTree() {
-        std::stringstream ss;
-        for(CubeTree* child : children)
-            if(child != nullptr)
-                ss << std::string(child->box);
-        std::cout << ss.str();
     }
 };
 #endif
