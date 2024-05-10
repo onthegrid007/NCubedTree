@@ -10,7 +10,7 @@
 template<std::uint8_t N, std::uint16_t MAXT, typename T, typename FType = double>
 class CubeTree {
     public:
-    typedef struct {
+    typedef struct BBox {
         glm::vec<3, FType, glm::defaultp> center;
         FType length;
         operator std::string() {
@@ -46,14 +46,14 @@ class CubeTree {
     
     CubeTree(const BBox& box, std::shared_ptr<T> data) :
         parent(nullptr),
-        children({nullptr}, {nullptr}, {nullptr}),
+        children(),
         box(box) {
         insert(data);
     }
     
     CubeTree(CubeTree* child) :
         parent(nullptr),
-        children({nullptr}, {nullptr}, {nullptr}),
+        children(),
         box({child->box.center.x - ((child->box.length * (N - 1))),
             child->box.center.y - ((child->box.length * (N - 1))),
             child->box.center.z - ((child->box.length * (N - 1))),
