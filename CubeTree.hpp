@@ -7,21 +7,15 @@
 #include <iostream>
 #include <memory>
 
-template<std::uint8_t N, std::uint16_t MAXT, typename T, typename FType = double>
+template<std::uint8_t N, std::uint16_t MaxT, typename T, typename FType = double>
 class CubeTree {
     public:
     typedef struct BBox {
         glm::vec<3, FType, glm::defaultp> center;
         FType length;
-        operator std::string() {
-            std::stringstream ss;
-            ss << "Center: " << center.x << " " << center.y << " " << center.z << " " << "Length: " << length << std::endl;
-            return ss.str();
-        }
     } BBox;
     CubeTree* parent;
     CubeTree* children[N][N][N];
-    constexpr static std::uint16_t MaxT{MAXT};
     std::mutex mtx;
     std::vector<std::shared_ptr<T>> data;
     BBox box;
@@ -112,8 +106,7 @@ class CubeTree {
                         }, childLength
                     };
                     if(inside(childBBox.center)) {
-                        if(child == nullptr)
-                            child = new CubeTree(childBBox, data);
+                        if(child == nullptr) child = new CubeTree(childBBox, data);
                         child->insert(data);
                         return;
                     }
@@ -127,22 +120,25 @@ class CubeTree {
         std::lock_guard<std::mutex> lock(mtx);
         if(inside(data->m_position)) {
             if(!isParent()) {
-                if(this->data.size() < MAXT) {
+                if(this->data.size() < MaxT) {
                     this->data.emplace_back(data);
                     return this;
-                } else if(this->data.size() >= MaxT) {
+                }
+                else if(this->data.size() >= MaxT) {
                     for(auto& d : this->data)
                         insertToChild(d);
                     this->data.clear();
                 }
-            } else {
+            }
+            else {
                 insertToChild(data);
             }
-        } else {
-            if(parent == nullptr)
-                parent = new CubeTree(this);
+        }
+        else {
+            if(parent == nullptr) parent = new CubeTree(this);
             return parent->insert(data);
         }
     }
 };
+
 #endif
