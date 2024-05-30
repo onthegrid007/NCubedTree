@@ -28,7 +28,7 @@ public:
     // Constructor for a new tree node
     CubeTree(const BBox& box, std::shared_ptr<T> data) :
         parent(nullptr), children{nullptr}, box(box) {
-        insertToChild(data);
+        if(insert(data) != this) throw std::exception("Initial data entry not within node!");
     }
 
     // Constructor for creating a new parent node
@@ -55,16 +55,26 @@ public:
     }
 
     // Function to check if a position is inside the bounding box
-    const bool inside(const glm::vec3& pos) const {
-        // std::cout << "checking if: " << pos.z << "is within: " << box.center.z - box.length / 2 << ", " << box.center.z + box.length / 2 << std::endl;
-        return
-            pos.x >= (box.center.x - box.length / 2) &&
-            pos.x <= (box.center.x + box.length / 2) &&
-            pos.y >= (box.center.y - box.length / 2) &&
-            pos.y <= (box.center.y + box.length / 2) &&
-            pos.z >= (box.center.z - box.length / 2) &&
-            pos.z <= (box.center.z + box.length / 2);
-    }
+    // const bool inside(const glm::vec3& pos) const {
+    //     const FType halfBl{box.length / 2};
+    //     std::cout << "checking if x: " << pos.x << "is inside: (" << box.center.x - halfBl << ", " << box.center.x + halfBl << ")\n";
+    //     std::cout << "checking if y: " << pos.y << "is inside: (" << box.center.y - halfBl << ", " << box.center.y + halfBl << ")\n";
+    //     std::cout << "checking if z: " << pos.z << "is inside: (" << box.center.z - halfBl << ", " << box.center.z + halfBl << ")\n\n";
+    //     return
+    //         pos.x >= (box.center.x - halfBl) &&
+    //         pos.x <= (box.center.x + halfBl) &&
+    //         pos.y >= (box.center.y - halfBl) &&
+    //         pos.y <= (box.center.y + halfBl) &&
+    //         pos.z >= (box.center.z - halfBl) &&
+    //         pos.z <= (box.center.z + halfBl);
+    // }
+
+    static const bool inside(const BBox& box, const glm::vec<3, FType, glm::defaultp>& pos) {
+    const FType halfBl{box.length / 2};
+    return (pos.x >= (box.center.x - halfBl) && pos.x <= (box.center.x + halfBl)) &&
+           (pos.y >= (box.center.y - halfBl) && pos.y <= (box.center.y + halfBl)) &&
+           (pos.z >= (box.center.z - halfBl) && pos.z <= (box.center.z + halfBl));
+}
 
     // Function to check if the current node has any children
     const bool isParent() const {
@@ -92,6 +102,7 @@ public:
 
         // Print the positions of the data in the current node
         for(const auto& obj : node->data) {
+            std::cout << indent << "  Data Name: (" << obj->m_name << ")" << std::endl;
             std::cout << indent << "  Data Position: (" << obj->m_position.x << ", " << obj->m_position.y << ", " << obj->m_position.z << ")" << std::endl;
         }
 
@@ -299,7 +310,7 @@ public:
     }
 
     // Function to query entities within a range around a specified position
-    void queryRange(const std::shared_ptr<T>& entity, FType range, std::vector<std::shared_ptr<T>>& results) {
+    void queryRange(const std::shared_ptr<T>& entity, const FType& range, std::vector<std::shared_ptr<T>>& results) {
         // Use the position of the entity as the center
         const auto& center{entity->m_position};
         // Check if the query range intersects with this node's bounding box
@@ -361,7 +372,7 @@ private:
 
     bool remove(std::shared_ptr<T> data) {
         std::lock_guard<std::mutex> lock(mtx);
-        if(inside(data->m_position)) {
+        if(inside(this->box, data->m_position)) {
             auto it{std::find(this->data.begin(), this->data.end(), data)};
             if(it != this->data.end()) {
                 this->data.erase(it);
@@ -385,9 +396,12 @@ private:
     
     // Function to insert data into a child node
     void insertToChild(std::shared_ptr<T> data) {
-        for(std::uint8_t i = 0; i < N; ++i) {
-            for(std::uint8_t j = 0; j < N; ++j) {
-                for(std::uint8_t k = 0; k < N; ++k) {
+        // std::cout << "Position: (" << data->m_position.x << ", " << data->m_position.y << ", " << data->m_position.z << ")" << std::endl;
+        // std::cout << "attempting to insert: " << data->m_name << " into node" << std::endl;
+        for (std::uint8_t i = 0; i < N; ++i) {
+            for (std::uint8_t j = 0; j < N; ++j) {
+                for (std::uint8_t k = 0; k < N; ++k) {
+                    // std::cout << "[" << int(N) << "][" << int(i) << "][" << int(j) << "][" << int(k) << "]\n";
                     const FType childLength{box.length / N};
                     const BBox childBBox{
                         {
@@ -397,47 +411,46 @@ private:
                         },
                         childLength
                     };
-                    // const BBox childBBox{
-                    //     {
-                    //         box.center.x - (childLength * (N - i - 1)),
-                    //         box.center.y - (childLength * (N - j - 1)),
-                    //         box.center.z - (childLength * (N - k - 1))
-                    //     }, childLength
-                    // };
-                    if(inside(data->m_position)) {
+                    if (inside(childBBox, data->m_position)) {
                         auto& child{children[i][j][k]};
-                        if(child == nullptr) {
+                        if (child == nullptr) {
                             child = new CubeTree(childBBox, data);
                             child->parent = this;
                         } else {
                             child->data.push_back(data);
+                            // std::cout << "Pushing back: " << data->m_name << std::endl << std::endl;
                         }
                         return;
+                    }
+                    else {
+                        // std::cout << "Data: " << data->m_name << " position was not inside bounding box of the child node! checking next!\n";
                     }
                 }
             }
         }
+        // std::cout << "Data: " << data->m_name << " position was not inside bounding box of the parent node!\n\n\n";
     }
 
 public:
     // Function to insert data into the tree
     CubeTree* insert(std::shared_ptr<T> data) {
         std::lock_guard<std::mutex> lock(mtx);
-        if(inside(data->m_position)) {
-            if(!isParent()) {
+        if(inside(this->box, data->m_position)) {
+            if(isParent()) {
+                insertToChild(data);
+            }
+            else {
                 if(this->data.size() < MaxT) {
                     this->data.emplace_back(data);
-                    return this;
-                } else if(this->data.size() >= MaxT) {
+                }
+                else {
                     for(auto& d : this->data)
                         insertToChild(d);
                     this->data.clear();
                 }
-            } else {
-                insertToChild(data);
             }
-            return this;
-        } else {
+        }
+        else {
             if(parent == nullptr) parent = new CubeTree(this);
             return parent->insert(data);
         }
