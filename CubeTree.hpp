@@ -54,28 +54,49 @@ public:
         }
     }
 
-    // Function to check if a position is inside the bounding box
-    // const bool inside(const glm::vec3& pos) const {
-    //     const FType halfBl{box.length / 2};
-    //     std::cout << "checking if x: " << pos.x << "is inside: (" << box.center.x - halfBl << ", " << box.center.x + halfBl << ")\n";
-    //     std::cout << "checking if y: " << pos.y << "is inside: (" << box.center.y - halfBl << ", " << box.center.y + halfBl << ")\n";
-    //     std::cout << "checking if z: " << pos.z << "is inside: (" << box.center.z - halfBl << ", " << box.center.z + halfBl << ")\n\n";
-    //     return
-    //         pos.x >= (box.center.x - halfBl) &&
-    //         pos.x <= (box.center.x + halfBl) &&
-    //         pos.y >= (box.center.y - halfBl) &&
-    //         pos.y <= (box.center.y + halfBl) &&
-    //         pos.z >= (box.center.z - halfBl) &&
-    //         pos.z <= (box.center.z + halfBl);
-    // }
-
     static const bool inside(const BBox& box, const glm::vec<3, FType, glm::defaultp>& pos) {
-    const FType halfBl{box.length / 2};
-    return (pos.x >= (box.center.x - halfBl) && pos.x <= (box.center.x + halfBl)) &&
-           (pos.y >= (box.center.y - halfBl) && pos.y <= (box.center.y + halfBl)) &&
-           (pos.z >= (box.center.z - halfBl) && pos.z <= (box.center.z + halfBl));
-}
+        const FType halfBl{box.length / 2};
+        return (pos.x >= (box.center.x - halfBl) && pos.x <= (box.center.x + halfBl)) &&
+            (pos.y >= (box.center.y - halfBl) && pos.y <= (box.center.y + halfBl)) &&
+            (pos.z >= (box.center.z - halfBl) && pos.z <= (box.center.z + halfBl));
+    }
 
+    CubeTree* findParentNode(const std::shared_ptr<T>& entity) {
+        // Start searching from the root node
+        return findParentNodeRecursive(this, entity);
+    }
+
+    private:
+    CubeTree* findParentNodeRecursive(CubeTree* node, const std::shared_ptr<T>& entity) {
+        if (!node) return nullptr;
+
+        // Lock the current node
+        std::lock_guard<std::mutex> lock(node->mtx);
+
+        // Check if the entity is in the current node
+        for (const auto& data : node->data) {
+            if (data == entity) {
+                return node->parent;
+            }
+        }
+
+        // Recursively search the children
+        for (std::uint8_t i = 0; i < N; ++i) {
+            for (std::uint8_t j = 0; j < N; ++j) {
+                for (std::uint8_t k = 0; k < N; ++k) {
+                    if (node->children[i][j][k] != nullptr) {
+                        CubeTree* parentNode = findParentNodeRecursive(node->children[i][j][k], entity);
+                        if (parentNode) return parentNode;
+                    }
+                }
+            }
+        }
+
+        // If the entity is not found in this subtree, return nullptr
+        return nullptr;
+    }
+
+    public:
     // Function to check if the current node has any children
     const bool isParent() const {
         for(std::uint8_t i{0}; i < N; i++)
@@ -190,40 +211,6 @@ public:
 
         return root;
     }
-
-    // static void collectAndRemove(CubeTree* node, std::vector<std::shared_ptr<T>>& toReinsert) {
-    //     std::lock_guard<std::mutex> lock(node->mtx);
-    //     auto it{node->data.begin()};
-    //     while (it != node->data.end()) {
-    //         if((*it)->m_position != (*it)->m_prevPosition) {
-    //             toReinsert.push_back(*it);
-    //             it = node->data.erase(it);
-    //         } else {
-    //             ++it;
-    //         }
-    //     }
-
-    //     for(std::uint8_t i = 0; i < N; i++) {
-    //         for(std::uint8_t j = 0; j < N; j++) {
-    //             for(std::uint8_t k = 0; k < N; k++) {
-    //                 if(node->children[i][j][k] != nullptr) {
-    //                     collectAndRemove(node->children[i][j][k], toReinsert);
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
-
-    // static CubeTree* update(CubeTree* root) {
-    //     std::vector<std::shared_ptr<T>> toReinsert;
-    //     collectAndRemove(root, toReinsert);
-
-    //     for(auto& data : toReinsert) {
-    //         root = root->insert(data);
-    //     }
-
-    //     return root;
-    // }
 
     void forEach(const std::function<bool(std::shared_ptr<T>&)>& func) {
         applyFunctionToNode(this, func);
