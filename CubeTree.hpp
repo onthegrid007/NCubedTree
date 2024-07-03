@@ -124,6 +124,7 @@ public:
         // Print the positions of the data in the current node
         for(const auto& obj : node->data) {
             std::cout << indent << "  Data Name: (" << obj->m_name << ")" << std::endl;
+            std::cout << indent << "  Data Prev Position: (" << obj->m_prevPosition.x << ", " << obj->m_prevPosition.y << ", " << obj->m_prevPosition.z << ")" << std::endl;
             std::cout << indent << "  Data Position: (" << obj->m_position.x << ", " << obj->m_position.y << ", " << obj->m_position.z << ")" << std::endl;
         }
 
@@ -178,7 +179,7 @@ public:
         }
     }
 
-    static CubeTree* update( const std::uint16_t& threads, CubeTree* root) {
+    static CubeTree* update(const std::uint16_t& threads, CubeTree* root) {
         std::vector<std::shared_ptr<T>> toReinsert;
         std::atomic<std::uint16_t> activeThreads{0};
         std::mutex collectMutex;
@@ -198,6 +199,8 @@ public:
                 return root->insert(data);
             }));
         }
+
+        for(auto& data : toReinsert) data->m_prevPosition = data->m_position;
 
         while (!futures.empty()) {
             root = futures.front().get();
