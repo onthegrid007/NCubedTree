@@ -386,12 +386,9 @@ private:
     
     // Function to insert data into a child node
     void insertToChild(std::shared_ptr<T> data) {
-        // std::cout << "Position: (" << data->m_position.x << ", " << data->m_position.y << ", " << data->m_position.z << ")" << std::endl;
-        // std::cout << "attempting to insert: " << data->m_name << " into node" << std::endl;
         for (std::uint8_t i = 0; i < N; ++i) {
             for (std::uint8_t j = 0; j < N; ++j) {
                 for (std::uint8_t k = 0; k < N; ++k) {
-                    // std::cout << "[" << int(N) << "][" << int(i) << "][" << int(j) << "][" << int(k) << "]\n";
                     const FType childLength{box.length / N};
                     const BBox childBBox{
                         {
@@ -408,7 +405,6 @@ private:
                             child->parent = this;
                         } else {
                             child->data.push_back(data);
-                            // std::cout << "Pushing back: " << data->m_name << std::endl << std::endl;
                         }
                         return;
                     }
@@ -418,7 +414,6 @@ private:
                 }
             }
         }
-        // std::cout << "Data: " << data->m_name << " position was not inside bounding box of the parent node!\n\n\n";
     }
 
 public:
